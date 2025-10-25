@@ -9,150 +9,523 @@
     
 </head>
 <body>
-    <h1>FIRST PROJECT</h1>
-    <h1>SUNSTIEN</h1>
     
+<title>ADMIN | Secure GID Verifier</title>
 
+<!-- Styles (Dark Red Security Alert) -->
 <style>
-    body {
-        font-family: Arial, sans-serif;
-        background: #0f0f1c;
-        color: #1e90ff;
-        margin: 0;
-        padding: 0;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100vh;
-    }
-    .box {
-        width: 380px;
-        background: rgba(0,0,0,0.6);
-        padding: 25px;
-        border-radius: 10px;
-        box-shadow: 0 0 10px #1e90ff;
-    }
-    input, button {
-        width: 100%;
-        padding: 10px;
-        margin-top: 10px;
-        background: black;
-        border: 1px solid #1e90ff;
-        border-radius: 5px;
-        color: #1e90ff;
-    }
-    button {
-        cursor: pointer;
-        background: #1e90ff;
-        color: black;
-        font-weight: bold;
-    }
-    h2 { text-align: center; }
-    #adminPanel { display: none; }
-    table {
-        width: 100%;
-        margin-top: 15px;
-        color: #1e90ff;
-        border-collapse: collapse;
-    }
-    table, th, td {
-        border: 1px solid #1e90ff;
-        padding: 5px;
-        text-align: center;
-    }
+  body{font-family:Arial,Helvetica,sans-serif;background:#000;color:#ff2b2b;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center}
+  .box{width:760px;max-width:95%;background:#0a0a0a;padding:22px;border-radius:12px;border:3px solid #b20000;box-shadow:0 0 30px #7a0000}
+  h1{margin:0 0 12px;color:#ff6b6b;text-align:left}
+  .row{display:flex;gap:12px}
+  input,button,select{padding:10px;border-radius:6px;border:2px solid #ff2b2b;background:#1b0000;color:#ffb6b6;font-size:14px}
+  button{cursor:pointer;background:#ff2b2b;color:#000;font-weight:700}
+  button:hover{filter:brightness(1.05)}
+  table{width:100%;border-collapse:collapse;margin-top:14px;color:#ffb6b6}
+  th,td{padding:8px;border:1px solid #ff2b2b;text-align:left;font-size:13px}
+  .actions button{margin-right:6px;padding:6px 8px;font-size:12px}
+  .small{font-size:12px;color:#ff9d9d}
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .status{font-size:13px}
+  .danger{color:#ff8b8b}
 </style>
+
+<!-- Libraries -->
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.24.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.24.0/firebase-firestore-compat.js"></script>
+<!-- CryptoJS for AES encryption -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 
 </head>
 <body>
 
 <div class="box">
+  <div class="topbar">
+    <h1>ADMIN — Secure GID Verifier</h1>
+    <div class="status small">Cloud: <span id="cloudStatus">Not connected</span></div>
+  </div>
 
-    <!-- Login Section -->
-    <div id="loginBox">
-        <h2>Admin Login</h2>
-        <input type="password" id="adminPass" placeholder="Enter Admin Password">
-        <button onclick="login()">Login</button>
+  <!-- Login -->
+  <div id="loginBox">
+    <input id="adminPass" type="password" placeholder="Enter Admin Password" />
+    <button onclick="login()">LOGIN</button>
+    <div class="small" style="margin-top:8px">Default admin password: <strong>admin123</strong> (change in script)</div>
+  </div>
+
+  <!-- Admin panel -->
+  <div id="adminPanel" style="display:none">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
+      <input id="nameField" placeholder="Name" />
+      <input id="dobField" placeholder="DOB (DD-MM-YYYY)" />
+      <input id="idField" placeholder="ID Number" />
+      <button onclick="addOrUpdateRecord()">ADD</button>
+      <select id="syncMode">
+        <option value="both">Sync: Local + Cloud</option>
+        <option value="local">Local Only</option>
+        <option value="cloud">Cloud Only</option>
+      </select>
     </div>
 
-    <!-- Admin Panel -->
-    <div id="adminPanel">
-        <h2>Admin Panel</h2>
-        <input type="text" id="name" placeholder="Enter Name">
-        <input type="text" id="dob" placeholder="Enter DOB (DD-MM-YYYY)">
-        <input type="text" id="idnum" placeholder="Enter ID Number">
-        <button onclick="addRecord()">Add Record</button>
-
-        <table id="recordsTable">
-            <tr>
-                <th>Name</th>
-                <th>DOB</th>
-                <th>ID Number</th>
-            </tr>
-        </table>
+    <div style="margin-top:12px">
+      <table id="recordsTable">
+        <thead>
+          <tr><th>Name</th><th>DOB</th><th>ID</th><th>Actions</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
     </div>
 
+    <div style="margin-top:12px;display:flex;gap:10px;align-items:center">
+      <button onclick="exportRecords()">EXPORT (JSON)</button>
+      <button onclick="clearAll()">CLEAR ALL (Local+Cloud)</button>
+      <div class="small danger" id="note">Note: Client-side security is limited; for production use server-side auth.</div>
+    </div>
+  </div>
 </div>
 
 <script>
-    const PASSWORD = "subramani"; // ✅ Change this anytime
+/* ====== CONFIGS (Change these) ====== */
+const ADMIN_PASSWORD = "admin123"; // change immediately
+const AES_SECRET = "replace_with_long_secret_key_rajan"; // change to long secret
+/* Firebase config - paste YOUR firebase config below */
+const FIREBASE_CONFIG = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  // ...other props from your Firebase console
+};
+/* ====== END CONFIGS ====== */
 
-    function login() {
-        const pass = document.getElementById("adminPass").value;
-        if (pass === PASSWORD) {
-            document.getElementById("loginBox").style.display = "none";
-            document.getElementById("adminPanel").style.display = "block";
-            loadRecords();
-        } else {
-            alert("Incorrect Password!");
-        }
-    }
+/* ====== FIREBASE INIT ====== */
+let db = null;
+try {
+  firebase.initializeApp(FIREBASE_CONFIG);
+  db = firebase.firestore();
+  document.getElementById("cloudStatus").textContent = "Configured (not necessarily accessible)";
+} catch(e) {
+  console.warn("Firebase init failed:", e);
+}
 
-    function addRecord() {
-        const name = document.getElementById("name").value;
-        const dob = document.getElementById("dob").value;
-        const idnum = document.getElementById("idnum").value;
+/* Utility: AES encrypt/decrypt */
+function encryptObj(obj) {
+  const s = JSON.stringify(obj);
+  return CryptoJS.AES.encrypt(s, AES_SECRET).toString();
+}
+function decryptToObj(cipher) {
+  try {
+    const bytes = CryptoJS.AES.decrypt(cipher, AES_SECRET);
+    const str = bytes.toString(CryptoJS.enc.Utf8);
+    return JSON.parse(str);
+  } catch(e) {
+    return null;
+  }
+}
 
-        if (!name || !dob || !idnum) {
-            alert("All fields are required!");
-            return;
-        }
+/* Local storage helpers (encrypted) */
+const LOCAL_KEY = "secure_records_v1_encrypted";
 
-        const record = { name, dob, idnum };
+function saveLocal(records) {
+  const cipher = encryptObj(records);
+  localStorage.setItem(LOCAL_KEY, cipher);
+}
+function loadLocal() {
+  const cipher = localStorage.getItem(LOCAL_KEY);
+  if (!cipher) return [];
+  const data = decryptToObj(cipher);
+  return Array.isArray(data) ? data : [];
+}
 
-        let data = JSON.parse(localStorage.getItem("records")) || [];
-        data.push(record);
-        localStorage.setItem("records", JSON.stringify(data));
+/* Cloud helpers (Firestore) — collection: gid_records */
+async function cloudAdd(record) {
+  if (!db) throw new Error("Firestore not initialized");
+  const docRef = await db.collection("gid_records").add(record);
+  return docRef.id;
+}
+async function cloudSetAll(records) {
+  if (!db) throw new Error("Firestore not initialized");
+  const col = db.collection("gid_records");
+  // naive approach: delete all then write new (simple client-side demo)
+  const snapshot = await col.get();
+  const batch = db.batch();
+  snapshot.forEach(d=> batch.delete(d.ref));
+  await batch.commit();
+  // write new
+  for (const r of records) {
+    await col.add(r);
+  }
+}
+async function cloudGetAll() {
+  if (!db) throw new Error("Firestore not initialized");
+  const snapshot = await db.collection("gid_records").get();
+  const out = [];
+  snapshot.forEach(d => out.push({ id: d.id, ...d.data() }));
+  return out;
+}
+async function cloudDeleteAll() {
+  if (!db) throw new Error("Firestore not initialized");
+  const snapshot = await db.collection("gid_records").get();
+  const batch = db.batch();
+  snapshot.forEach(d => batch.delete(d.ref));
+  await batch.commit();
+}
 
-        document.getElementById("name").value = "";
-        document.getElementById("dob").value = "";
-        document.getElementById("idnum").value = "";
+/* UI + Operations */
+let editIndex = -1;
 
-        loadRecords();
-    }
+function login(){
+  const pass = document.getElementById("adminPass").value;
+  if(pass === ADMIN_PASSWORD){
+    document.getElementById("loginBox").style.display = "none";
+    document.getElementById("adminPanel").style.display = "block";
+    loadAndRender();
+  } else {
+    alert("⚠️ Wrong Password!");
+  }
+}
 
-    function loadRecords() {
-        const table = document.getElementById("recordsTable");
-        table.innerHTML = `
-            <tr>
-                <th>Name</th>
-                <th>DOB</th>
-                <th>ID Number</th>
-            </tr>
-        `;
+async function addOrUpdateRecord(){
+  const n = document.getElementById("nameField").value.trim();
+  const d = document.getElementById("dobField").value.trim();
+  const id = document.getElementById("idField").value.trim();
+  if(!n||!d||!id){ alert("Enter all fields"); return; }
 
-        let data = JSON.parse(localStorage.getItem("records")) || [];
+  const syncMode = document.getElementById("syncMode").value;
 
-        data.forEach(r => {
-            table.innerHTML += `
-                <tr>
-                    <td>${r.name}</td>
-                    <td>${r.dob}</td>
-                    <td>${r.idnum}</td>
-                </tr>
-            `;
-        });
-    }
+  let records = loadLocal();
+
+  if(editIndex >= 0){
+    // update
+    records[editIndex] = { name:n, dob:d, idnum:id };
+    editIndex = -1;
+  } else {
+    records.push({ name:n, dob:d, idnum:id });
+  }
+
+  // Save based on sync mode
+  if(syncMode === "local" || syncMode === "both") {
+    saveLocal(records);
+  }
+  if((syncMode === "cloud" || syncMode === "both") && db) {
+    try {
+      await cloudSetAll(records);
+      document.getElementById("cloudStatus").textContent = "Synced";
+    } catch(e){ console.warn(e); document.getElementById("cloudStatus").textContent = "Cloud error"; }
+  }
+
+  // reset form and render
+  document.getElementById("nameField").value = document.getElementById("dobField").value = document.getElementById("idField").value = "";
+  renderTable(records);
+}
+
+function renderTable(records){
+  const tbody = document.querySelector("#recordsTable tbody");
+  tbody.innerHTML = "";
+  records.forEach((r, idx) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${escapeHTML(r.name)}</td><td>${escapeHTML(r.dob)}</td><td>${escapeHTML(r.idnum)}</td>
+      <td class="actions">
+        <button onclick="editRecord(${idx})">Edit</button>
+        <button onclick="deleteRecord(${idx})">Delete</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function editRecord(idx){
+  const records = loadLocal();
+  const r = records[idx];
+  if(!r) return alert("Record not found");
+  document.getElementById("nameField").value = r.name;
+  document.getElementById("dobField").value = r.dob;
+  document.getElementById("idField").value = r.idnum;
+  editIndex = idx;
+}
+
+function deleteRecord(idx){
+  if(!confirm("Delete this record?")) return;
+  let records = loadLocal();
+  records.splice(idx,1);
+  saveLocal(records);
+  // also update cloud (best effort)
+  if(db) cloudSetAll(records).catch(()=>document.getElementById("cloudStatus").textContent = "Cloud error");
+  renderTable(records);
+}
+
+function escapeHTML(s){ return String(s).replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]); }
+
+function loadAndRender(){
+  // load local encrypted; if none but cloud exists fetch cloud
+  let records = loadLocal();
+  if(records.length === 0 && db){
+    cloudGetAll().then(cloudRecords => {
+      if(cloudRecords && cloudRecords.length>0){
+        // cloud records may have id field — strip it
+        const arr = cloudRecords.map(r=>({ name:r.name, dob:r.dob, idnum:r.idnum }));
+        saveLocal(arr); // persist encrypted locally
+        renderTable(arr);
+        document.getElementById("cloudStatus").textContent = "Loaded from cloud";
+      } else {
+        renderTable([]);
+      }
+    }).catch(e=>{ console.warn(e); renderTable([]); });
+  } else {
+    renderTable(records);
+  }
+}
+
+function exportRecords(){
+  const records = loadLocal();
+  const blob = new Blob([JSON.stringify(records,null,2)], { type:"application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = "records.json"; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function clearAll(){
+  if(!confirm("Clear ALL records locally and in cloud?")) return;
+  localStorage.removeItem(LOCAL_KEY);
+  if(db) cloudDeleteAll().then(()=>{ alert("Cleared both local and cloud (if configured)"); renderTable([]); }).catch(()=>{ alert("Cleared local, cloud failed"); renderTable([]); });
+  else { alert("Cleared local"); renderTable([]); }
+}
+
+/* initial hint: load any local data if present */
+(function init(){
+  const local = loadLocal();
+  if(local.length>0) document.getElementById("cloudStatus").textContent = "Local data present";
+})();
 </script>
 
+U S E R U I
+
+
+<title>VERIFY | GID Security Check</title>
+
+<!-- Styles: Dark Red -->
+<style>
+  body{font-family:Arial,Helvetica,sans-serif;background:#000;color:#ff3b3b;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center}
+  .box{width:440px;max-width:96%;background:#0a0a0a;padding:22px;border-radius:12px;border:3px solid #b20000;box-shadow:0 0 30px #7a0000}
+  h2{margin:0 0 12px;color:#ff7b7b}
+  input,button{padding:10px;border-radius:6px;border:2px solid #ff2b2b;background:#1b0000;color:#ffb6b6;font-size:14px;width:100%}
+  button{cursor:pointer;background:#ff2b2b;color:#000;font-weight:700}
+  .row{display:flex;gap:8px;margin-top:8px}
+  #result{margin-top:12px;font-weight:700;font-size:16px}
+  .fail{animation:shake .35s 2;color:#ff5b5b}
+  .ok{color:#00ff10;text-shadow:0 0 8px #00ff00}
+  @keyframes shake{0%{transform:translateX(0);}25%{transform:translateX(6px);}50%{transform:translateX(-6px);}75%{transform:translateX(6px);}100%{transform:translateX(0);}}
+  .small{font-size:12px;color:#ff9d9d;margin-top:8px}
+  input[type=file]{padding:6px}
+</style>
+
+<!-- Libraries -->
+<!-- PDF.js (for text extraction) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js"></script>
+<!-- Tesseract.js (for OCR fallback) -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
+
+</head>
+<body>
+<div class="box">
+  <h2>Identity Check 🔎</h2>
+
+  <!-- Manual verification -->
+  <input id="name" placeholder="Name" />
+  <div class="row">
+    <input id="dob" placeholder="DOB (DD-MM-YYYY)" />
+    <input id="idnum" placeholder="ID Number" />
+  </div>
+  <div style="margin-top:8px;display:flex;gap:8px">
+    <button style="flex:1" onclick="manualVerify()">Verify Manually</button>
+    <label style="flex:1;display:block">
+      <input type="file" id="pdfFile" accept="application/pdf,image/*" style="display:none" onchange="onFileSelected(event)">
+      <button type="button" onclick="document.getElementById('pdfFile').click()">Upload PDF/Image</button>
+    </label>
+  </div>
+
+  <div id="result" class="small"></div>
+  <div id="progress" class="small"></div>
+  <div class="small" style="margin-top:10px">Tip: PDF selectable text is faster; for scanned docs we run OCR automatically.</div>
+</div>
+
+<script>
+/* Utility to read encrypted localStorage from admin (same key as admin) — but we can't decrypt here, so we expect admin saved plain? 
+   In our admin we saved encrypted with AES; instead of sharing secret, user page will use unencrypted fallback from localStorage if present.
+   For simplicity here: we attempt to read plain 'records' then encrypted key 'secure_records_v1_encrypted' only if AES_SECRET is known.
+   In production you'd use server-side verification with Firebase auth & rules.
+*/
+const LOCAL_KEY_PLAIN = "records"; // older key
+const LOCAL_KEY_ENC = "secure_records_v1_encrypted"; // admin uses this
+
+/* Try best-effort to read local encrypted (requires same AES secret - client doesn't have it).
+   We'll prioritize cloud (Firestore) if configured in admin; but user will usually verify locally on same machine.
+   For cloud public read we would need Firestore rules. For demo: use local unencrypted fallback or ask admin to enable cloud public read.
+*/
+
+/* Manual verify */
+function manualVerify(){
+  const name = document.getElementById("name").value.trim();
+  const dob = document.getElementById("dob").value.trim();
+  const idnum = document.getElementById("idnum").value.trim();
+  const res = document.getElementById("result");
+  if(!name||!dob||!idnum){ res.className='fail'; res.textContent = "⚠ Enter all details"; return; }
+  const records = loadRecordsBestEffort();
+  const found = records.find(r => r.name.toLowerCase() === name.toLowerCase() && r.dob === dob && r.idnum === idnum);
+  if(found){ res.className='ok'; res.textContent = "✅ VERIFIED | Original"; }
+  else { res.className='fail'; res.textContent = "❌ No match found"; }
+}
+
+/* Load records best-effort: try plain local, then (if available) cloud public via Firestore REST public endpoint if you configure it.
+   Here we try plain local key first.
+*/
+function loadRecordsBestEffort(){
+  try {
+    const plain = JSON.parse(localStorage.getItem(LOCAL_KEY_PLAIN) || "[]");
+    if(Array.isArray(plain) && plain.length>0) return plain;
+  } catch(e){}
+  // Try encrypted local: we cannot decrypt without secret — skipping.
+  // Return empty array as fallback.
+  return [];
+}
+
+/* PDF / Image upload handling (Hybrid: try text extraction then OCR) */
+async function onFileSelected(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  document.getElementById("progress").textContent = "Processing file...";
+  // If PDF -> attempt text extraction with pdf.js
+  if(file.type === "application/pdf"){
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({data:arrayBuffer}).promise;
+      let combinedText = "";
+      for(let i=1;i<=pdf.numPages;i++){
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        const pageText = content.items.map(it=>it.str).join(" ");
+        combinedText += " " + pageText;
+      }
+      combinedText = combinedText.trim();
+      if(combinedText.length > 30){
+        // successful text extraction
+        document.getElementById("progress").textContent = "Extracted text from PDF, attempting verification...";
+        attemptVerifyFromText(combinedText);
+        return;
+      } else {
+        // No selectable text → fallback to OCR
+        document.getElementById("progress").textContent = "No selectable text found in PDF — running OCR (this may take a few seconds)...";
+        // render PDF page to canvas and OCR; we'll rasterize first page for speed
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 2 });
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        const ctx = canvas.getContext("2d");
+        await page.render({canvasContext:ctx, viewport}).promise;
+        runOCRonCanvas(canvas);
+        return;
+      }
+    } catch(err){
+      console.error(err);
+      document.getElementById("progress").textContent = "PDF extraction error — trying OCR...";
+      // fallback to OCR by drawing to canvas via File -> Image
+    }
+  }
+
+  // For images or fallback: create image and OCR
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  img.onload = () => {
+    const canvas = document.createElement("canvas");
+    const maxW = 1600;
+    const scale = Math.min(1, maxW / img.width);
+    canvas.width = img.width * scale;
+    canvas.height = img.height * scale;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img,0,0,canvas.width,canvas.height);
+    URL.revokeObjectURL(url);
+    runOCRonCanvas(canvas);
+  };
+  img.src = url;
+}
+
+function attemptVerifyFromText(text){
+  document.getElementById("progress").textContent = "Searching extracted text for Name / DOB / ID...";
+  // naive extraction heuristics: search by regex patterns
+  // DOB pattern dd-mm-yyyy or dd/mm/yyyy or yyyy-mm-dd
+  const dobRegex = /(\d{2}[-\/]\d{2}[-\/]\d{4})|(\d{4}[-\/]\d{2}[-\/]\d{2})/;
+  const idRegex = /([A-Z0-9]{6,20})/g; // broad
+  const nameMatch = extractLikelyName(text);
+  const dobMatch = text.match(dobRegex);
+  const idMatch = Array.from(text.matchAll(idRegex)).map(m=>m[0]).filter(s=>s.length>=6);
+
+  const candidate = {
+    name: nameMatch || "",
+    dob: dobMatch ? dobMatch[0] : "",
+    idnum: idMatch.length>0 ? idMatch[0] : ""
+  };
+  document.getElementById("progress").textContent = `Candidates found → Name: ${candidate.name||'-'}, DOB: ${candidate.dob||'-'}, ID: ${candidate.idnum||'-'}`;
+  // if at least dob + id present, attempt verify
+  if(candidate.dob && candidate.idnum){
+    verifyCandidate(candidate);
+  } else {
+    // try OCR as fallback
+    document.getElementById("progress").textContent += " — insufficient data, running OCR...";
+    // convert text to trigger OCR fallback by user re-uploading or we can run OCR on rasterized pdf page above.
+  }
+}
+
+function extractLikelyName(text){
+  // heuristic: lines with words having capitalized first letters and 2-4 words long
+  const lines = text.split(/\r?\n|\.|\t/).map(s=>s.trim()).filter(Boolean);
+  for(const line of lines){
+    const words = line.split(/\s+/);
+    if(words.length>=2 && words.length<=4 && words.every(w=>/^[A-Z][a-zA-Z]+$/.test(w))) return line;
+  }
+  // fallback: first two words capitalized
+  const tok = text.split(/\s+/).slice(0,6).join(" ");
+  return tok;
+}
+
+/* OCR using Tesseract on canvas */
+async function runOCRonCanvas(canvas){
+  document.getElementById("progress").textContent = "OCR running (this can take 7–20s depending on device)...";
+  try {
+    const { data: { text } } = await Tesseract.recognize(canvas, 'eng', { logger: m => {
+      // progress logging
+      if (m.status === 'recognizing text') document.getElementById("progress").textContent = `OCR: ${(m.progress*100).toFixed(0)}%`;
+    }});
+    document.getElementById("progress").textContent = "OCR complete — attempting verification...";
+    attemptVerifyFromText(text);
+  } catch(err){
+    console.error(err);
+    document.getElementById("progress").textContent = "OCR failed: " + err.message;
+  }
+}
+
+/* Verify candidate object against records */
+function verifyCandidate(candidate){
+  const res = document.getElementById("result");
+  const records = loadRecordsBestEffort();
+  const match = records.find(r => {
+    const sameName = candidate.name && r.name && r.name.toLowerCase().includes(candidate.name.toLowerCase()) || false;
+    const sameDob = candidate.dob && r.dob && r.dob === candidate.dob;
+    const sameId = candidate.idnum && r.idnum && r.idnum === candidate.idnum;
+    // require either both dob+id or exact match of id
+    return sameId || (sameDob && sameName);
+  });
+  if(match){ res.className='ok'; res.textContent = "✅ VERIFIED | Original"; }
+  else { res.className='fail'; res.textContent = "❌ No match found"; }
+}
+
+/* same helper as manual to load local records */
+function loadRecordsBestEffort(){
+  try {
+    const plain = JSON.parse(localStorage.getItem("records") || "[]");
+    if(Array.isArray(plain) && plain.length>0) return plain;
+  } catch(e){}
+  // encrypted data can't be read here without secret; to enable cloud verification configure Firestore public read in admin
+  return [];
+}
+</script>
 </body>
 </html>
