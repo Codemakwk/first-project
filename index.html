@@ -7,5 +7,141 @@
 </head>
 <body>
     
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #0f0f1c;
+        color: #1e90ff;
+        margin: 0;
+        padding: 0;
+    }
+    h1, h2 {
+        text-align: center;
+    }
+    .container {
+        display: flex;
+        justify-content: space-around;
+        padding: 20px;
+    }
+    .box {
+        background: #1a1a2e;
+        padding: 20px;
+        border-radius: 10px;
+        width: 45%;
+    }
+    input, button {
+        margin: 5px 0;
+        padding: 8px;
+        width: 100%;
+        border-radius: 5px;
+        border: none;
+    }
+    #adminSection {
+        display: none;
+    }
+    #userSection {
+        display: block;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+    }
+    th, td {
+        border: 1px solid #1e90ff;
+        padding: 5px;
+        text-align: center;
+    }
+</style>
+</head>
+<body>
+
+<h1>Teckings GID Verifier</h1>
+
+<div class="container">
+    <!-- Admin Section -->
+    <div class="box" id="adminSection">
+        <h2>Admin Panel</h2>
+        <input type="password" id="adminPassword" placeholder="Enter Admin Password">
+        <button onclick="checkAdminPassword()">Login</button>
+        <div id="adminControls" style="display:none;">
+            <h3>Add Record</h3>
+            <input type="text" id="adminName" placeholder="Name">
+            <input type="date" id="adminDOB" placeholder="Date of Birth">
+            <input type="text" id="adminID" placeholder="ID Number">
+            <button onclick="addRecord()">Add Record</button>
+
+            <h3>Stored Records</h3>
+            <table id="recordTable">
+                <tr>
+                    <th>Name</th>
+                    <th>DOB</th>
+                    <th>ID Number</th>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <!-- User Section -->
+    <div class="box" id="userSection">
+        <h2>User Verification</h2>
+        <input type="text" id="userName" placeholder="Enter Name">
+        <input type="date" id="userDOB" placeholder="Enter DOB">
+        <input type="text" id="userID" placeholder="Enter ID Number">
+        <button onclick="verifyRecord()">Verify</button>
+        <p id="verificationResult"></p>
+    </div>
+</div>
+
+<script>
+    const records = [];
+
+    function checkAdminPassword() {
+        const password = document.getElementById('adminPassword').value;
+        if(password === 'admin123'){ // Hardcoded password
+            document.getElementById('adminControls').style.display = 'block';
+        } else {
+            alert('Incorrect Password');
+        }
+    }
+
+    function addRecord() {
+        const name = document.getElementById('adminName').value;
+        const dob = document.getElementById('adminDOB').value;
+        const id = document.getElementById('adminID').value;
+
+        if(name && dob && id){
+            records.push({name, dob, id});
+            updateTable();
+            alert('Record added successfully!');
+            document.getElementById('adminName').value = '';
+            document.getElementById('adminDOB').value = '';
+            document.getElementById('adminID').value = '';
+        } else {
+            alert('Please fill all fields');
+        }
+    }
+
+    function updateTable() {
+        const table = document.getElementById('recordTable');
+        table.innerHTML = '<tr><th>Name</th><th>DOB</th><th>ID Number</th></tr>';
+        records.forEach(record => {
+            const row = table.insertRow();
+            row.insertCell(0).innerText = record.name;
+            row.insertCell(1).innerText = record.dob;
+            row.insertCell(2).innerText = record.id;
+        });
+    }
+
+    function verifyRecord() {
+        const name = document.getElementById('userName').value;
+        const dob = document.getElementById('userDOB').value;
+        const id = document.getElementById('userID').value;
+
+        const found = records.find(r => r.name === name && r.dob === dob && r.id === id);
+        document.getElementById('verificationResult').innerText = found ? '✅ Original Document Verified!' : '❌ Record Not Found';
+    }
+</script>
+    
 </body>
 </html>
